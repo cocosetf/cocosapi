@@ -1,0 +1,61 @@
+free c: channel.
+
+type host.
+type nonce.
+type pkey.
+type skey.
+type spkey.
+type sskey.
+
+fun nonce_to_bitstring(nonce): bitstring [data,typeConverter].
+
+(* Public key encryption *)
+
+fun pk(skey): pkey.
+fun aenc(bitstring, pkey): bitstring.
+reduc forall x: bitstring, y: skey; adec(aenc(x,pk(y)),y) = x.
+
+(* Signatures *)
+
+fun spk(sskey): spkey.
+fun sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, k: sskey; getmess(sign(m,k)) = m.
+reduc forall m: bitstring, k: sskey; checksign(sign(m,k), spk(k)) = m.
+
+(* Shared key encryption *)
+
+fun senc(bitstring,bitstring): bitstring.
+reduc forall x: bitstring, y: bitstring; sdec(senc(x,y),y) = x.
+
+(* Secrecy assumptions *)
+not attacker (new Ktls).
+
+(* Secrecy queries *)
+
+free secretA: bitstring [private].
+
+query attacker(secretA).
+
+(* SM - A *)
+let processA (Ktls: bitstring, Nenc: bitstring) =
+	in(c, m: bitstring);
+	let (Key: bitstring, Nx: bitstring) = sdec (m, Ktls) in
+	out(c, senc((sdec(Nenc,Key), Nx), Ktls)).
+
+(* BA - B *)
+let processB (Ktls:bitstring, Ns: bitstring, Kcc: bitstring) =
+	new N2: bitstring;
+	out (c, senc((Kcc,N2),Ktls));
+	in(c, m:bitstring);
+	let (NX: bitstring, NY: bitstring) = sdec (m, Ktls) in
+	if NX = Ns then if NY = N2 then 
+	out(c, senc(secretA, NX)).
+
+(* Main *)
+process
+	new skB : skey; let pkB = pk(skB) in out (c , pkB);
+	new Ns: bitstring;
+	new Kcc: bitstring;
+	new Ktls: bitstring;
+	new Nenc: bitstring; let Nenc = senc (Ns,Kcc) in out (c, Nenc);
+	( ( ! processA (Ktls, Nenc) ) | ( ! processB (Ktls, Ns, Kcc) ) )
